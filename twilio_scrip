@@ -1,0 +1,97 @@
+# bridge_call.py
+# pip install twilio
+
+from twilio.rest import Client
+import time
+from threading import Timer
+# Replace these with your actual credentials and numbers
+ACCOUNT_SID = ""
+AUTH_TOKEN = ""
+
+TWILIO_NUMBER = ""  # Your Twilio phone number (E.164 format)
+phone1 = ""        # First phone to call
+phone2 = ""        # Second phone to call (bridged after phone1 answers)
+
+
+CONFERENCE_NAME = "MYConferenceRoom"
+TOTAL_CALL_DURATION = 60
+ANNOUNCEMENT_DELAY = 20
+
+
+# def main():
+client = Client(ACCOUNT_SID, AUTH_TOKEN)
+
+conference_twiml = f"""
+<Response>
+  <Dial answerOnBridge="true">
+    <Conference startConferenceOnEnter="true" endConferenceOnExit="false">
+      {CONFERENCE_NAME}
+    </Conference>
+  </Dial>
+</Response>
+"""
+
+# Initiate calls so that both parties join the conference
+call1 = client.calls.create(
+    to=phone1,
+    from_=TWILIO_NUMBER,
+    twiml=conference_twiml
+)
+print(f"Call to phone1 initiated. SID: {call1.sid}")
+
+call2 = client.calls.create(
+    to=phone2,
+    from_=TWILIO_NUMBER,
+    twiml=conference_twiml
+)
+print(f"Call to phone2 initiated. SID: {call2.sid}")
+
+# Wait until the announcement time
+time.sleep(ANNOUNCEMENT_DELAY)
+
+# TwiML that plays the announcement then redirects back into the conference.
+# When updating a live call, Twilio will interrupt the current call,
+# execute this TwiML, and then, via the <Redirect>, rejoin the conference.
+announcement_twiml = f"""
+<Response>
+  <Say voice="alice">The call will end in 30 seconds.</Say>
+  <Dial answerOnBridge="true">
+    <Conference startConferenceOnEnter="true" endConferenceOnExit="false">
+      {CONFERENCE_NAME}
+    </Conference>
+  </Dial>
+</Response>
+"""
+
+# Update both live calls so that each plays the announcement
+client.calls(call1.sid).update(twiml=announcement_twiml)
+client.calls(call2.sid).update(twiml=announcement_twiml)
+print("Announcement played (calls updated).")
+
+# Wait until the total call duration is reached
+time.sleep(TOTAL_CALL_DURATION - ANNOUNCEMENT_DELAY)
+
+# End both calls
+client.calls(call1.sid).update(status="completed")
+client.calls(call2.sid).update(status="completed")
+print("Call ended.")
+
+#     # As soon as phone1 answers, Twilio will automatically dial phone2.
+#     twiml = f"""
+#     <Response>
+#         <Dial callerId="{TWILIO_NUMBER}" timeLimit="{CALL_DURATION_LIMIT}" answerOnBridge="true">
+#             <Number>{phone2}</Number>
+#         </Dial>
+#     </Response>
+#     """
+
+#     call = client.calls.create(
+#         to=phone1,
+#         from_=TWILIO_NUMBER,
+#         twiml=twiml
+#     )
+
+#     print(f"Call initiated! SID: {call.sid}")
+
+# if __name__ == "__main__":
+#     main()
